@@ -22,7 +22,7 @@ button{font:inherit;cursor:pointer;border:1px solid var(--bd);background:var(--c
 input{font:inherit;font-size:20px;width:100%;box-sizing:border-box;padding:10px;border-radius:10px;border:2px solid var(--bd);background:var(--card);color:var(--fg);margin:8px 0}
 .ok{color:var(--ok);font-weight:700}.no{color:var(--bad);font-weight:700}.top{font-size:13px;opacity:.7}
 </style></head><body>
-<header><h1>🏝️ 單字島 Lesson 3</h1><span><span class="pill" id="st">🏅 0/4</span> <span class="pill" id="cr">👑 未挑戰</span></span></header>
+<header><h1>🏝️ 單字島 Lesson 3</h1><span><span class="pill" id="st">🏅 0/4</span> <span class="pill" id="cr">👑 未挑戰</span></span><span><span class="pill" id="who"></span> <button id="sw">換人</button> <button id="clr">🗑 清除我的資料</button></span></header>
 <canvas id="cv"></canvas>
 <div id="bar"><span id="hint">方向鍵／WASD 走路，或點地圖走過去</span><button class="big" id="go" style="display:none"></button></div>
 <div id="modal"><div class="box" id="box"></div></div>
@@ -72,17 +72,22 @@ const TW={n:'拼字高塔',e:'🗼',x:9,y:4,w:2,h:3,c:'#f39c12'};
 P.forEach(p=>{p.w=3;p.h=2});
 const $=s=>document.querySelector(s),sh=a=>[...a].sort(()=>Math.random()-.5);
 const norm=s=>s.toLowerCase().replace(/[!.,?]/g,'').replace(/\s+/g,' ').trim();
-let save={st:[0,0,0,0],crown:0};try{Object.assign(save,JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){}
-function persist(){try{localStorage.setItem(KEY,JSON.stringify(save))}catch(e){}}
+let save={st:[0,0,0,0],crown:0,best:0},who='';
+const RK=KEY+':roster',PK=KEY+':p:';
+const esc=s=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function roster(){try{const r=JSON.parse(localStorage.getItem(RK)||'[]');return Array.isArray(r)?r:[]}catch(e){return[]}}
+function setRoster(r){try{localStorage.setItem(RK,JSON.stringify(r))}catch(e){}}
+function readP(n){const d={st:[0,0,0,0],crown:0,best:0};try{Object.assign(d,JSON.parse(localStorage.getItem(PK+n)||'{}'))}catch(e){}return d}
+function persist(){if(!who)return;try{localStorage.setItem(PK+who,JSON.stringify(save))}catch(e){}}
 let warned=0;
 function speak(t){try{if(!window.speechSynthesis){if(!warned++)alert('這個瀏覽器不支援語音朗讀，請改用 Chrome 或 Safari。');return}
 speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='en-US';u.rate=.85;speechSynthesis.speak(u)}catch(e){}}
-function hud(){const n=save.st.filter(Boolean).length;$('#st').textContent='🏅 '+n+'/4';$('#cr').textContent=save.crown?'👑 已獲得':'👑 未挑戰'}
+function hud(){const n=save.st.filter(Boolean).length;$('#st').textContent='🏅 '+n+'/4';$('#cr').textContent=save.crown?'👑 已獲得':'👑 未挑戰';$('#who').textContent='👤 '+who}
 /* ---------- modal ---------- */
 let isOpen=false;
 function M(h){isOpen=true;$('#modal').style.display='flex';$('#box').innerHTML='<button class="x" id="xx">✕</button>'+h}
 function closeM(){isOpen=false;$('#modal').style.display='none';window.speechSynthesis&&speechSynthesis.cancel();hud()}
-$('#box').addEventListener('click',e=>{if(e.target.id==='xx')closeM();const t=e.target.closest('[data-t]');if(t)speak(t.dataset.t)});
+$('#box').addEventListener('click',e=>{if(e.target.id==='xx'&&who)closeM();const t=e.target.closest('[data-t]');if(t)speak(t.dataset.t)});
 /* ---------- questions ---------- */
 function distract(w){const o=W.filter(x=>x!==w);return sh([...sh(o.filter(x=>x.pos===w.pos)),...sh(o.filter(x=>x.pos!==w.pos))]).slice(0,3)}
 function mc(w,key){const opts=sh([w,...distract(w)]);return{o:opts.map(x=>x[key]),c:opts.indexOf(w),r:w[key]}}
@@ -116,7 +121,7 @@ function openTower(){
  if(save.st.filter(Boolean).length<4){M(`<h2>🗼 拼字高塔</h2><p>🔒 要先在四個地點都蓋到章，才能挑戰高塔。<br>目前 ${save.st.filter(Boolean).length}/4。</p><button class="big" onclick="closeM()">好，我去逛逛</button>`);return}
  M(`<h2>🗼 拼字高塔</h2><p>最終挑戰共 18 題，不能偷看單字表：<br>① 聽音拼字 6 題　② 英翻中 6 題　③ 中翻英（打字）6 題<br>答對 14 題以上，獲得 👑。</p><button class="big" id="bs">開始挑戰</button>`);
  $('#bs').onclick=()=>{const s=sh(W);const qs=[...s.slice(0,6).map(qSpell),...s.slice(6,12).map(qEn2Zh),...s.slice(12,18).map(qZh2EnT)];
-  runQ(qs,'高塔挑戰',(ok,bad,n)=>{const pass=ok>=14;if(pass){save.crown=1;persist()}
+  runQ(qs,'高塔挑戰',(ok,bad,n)=>{const pass=ok>=14;save.best=Math.max(save.best||0,ok);if(pass)save.crown=1;persist()
    M(`<h2>${pass?'👑 挑戰成功！':'差一點點！'}</h2><p>答對 ${ok}/${n} 題。${pass?'':'需要 14 題以上。'}</p>${bad.length?'<p>錯的單字：</p>'+bad.map(w=>`<div class="w"><button class="sp" data-t="${w.en}">🔊</button><b>${w.en}</b> ${w.zh}</div>`).join(''):''}<button class="big" id="b2">${pass?'回地圖':'再挑戰一次'}</button>`);
    $('#b2').onclick=()=>pass?closeM():openTower()})}}
 /* ---------- map ---------- */
@@ -126,7 +131,7 @@ const me={x:10,y:10.5};let tgt=null;const keys={};
 function blocked(x,y){if(x<1.2||y<1.2||x>MW-1.2||y>MH-1.2)return 1;return B.some(b=>x>b.x-.25&&x<b.x+b.w+.25&&y>b.y+.4-.25&&y<b.y+b.h+.1)}
 function nearest(){let best=null,d0=1.5;B.forEach((b,i)=>{const d=door(b),dd=Math.hypot(me.x-d.x,me.y-d.y);if(dd<d0){d0=dd;best=i}});return best}
 function enter(i){if(i==null)return;i<4?openPlace(i):openTower()}
-addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(isOpen){if(k==='escape')closeM();return}
+addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(isOpen){if(k==='escape'&&who)closeM();return}
  if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k))e.preventDefault();keys[k]=1;tgt=null;if(k==='e')enter(nearest())});
 addEventListener('keyup',e=>delete keys[e.key.toLowerCase()]);
 function tap(e){if(isOpen)return;const r=cv.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*MW,y=(e.clientY-r.top)/r.height*MH;
@@ -154,5 +159,18 @@ function draw(t){
  const n=nearest();if(n!=null){const d=door(B[n]);g.strokeStyle='#ffd400';g.lineWidth=3;g.beginPath();g.arc(d.x*T,(d.y-.5)*T,16+Math.sin(t/200)*2,0,7);g.stroke()}
  g.font='26px serif';g.fillStyle='#000';g.fillText('🧒',me.x*T,me.y*T-8+Math.sin(t/150)*(tgt||Object.keys(keys).length?2:0))}
 hud();requestAnimationFrame(frame);
-M(`<h2>🏝️ 歡迎來到單字島</h2><p>走到四棟建築門口，先聽單字、讀例句，再做 5 題測驗蓋章。四個章都集滿，就能挑戰 🗼 拼字高塔（拼字、英翻中、中翻英）。</p><p>🔊 按鈕會念出單字；請把手機音量打開。</p><button class="big" onclick="closeM()">出發！</button>`);
+function login(){const r=roster();
+ M(`<h2>🏝️ 歡迎來到單字島</h2><p>輸入名字就能開始，每個人的蓋章和成績分開存。走到建築門口先聽單字，再做測驗蓋章；集滿 4 個章就能挑戰 🗼 拼字高塔。🔊 請把音量打開。</p><input id="nm" maxlength="12" placeholder="你的名字" autocomplete="off"><button class="big" id="st1">開始</button>`+
+  (r.length?`<div class="top">這台裝置上的同學（點名字繼續）</div>`+r.map((n,i)=>{const p=readP(n);return `<div class="w"><button data-pl="${i}">${esc(n)}</button> 🏅${p.st.filter(Boolean).length}/4 ${p.crown?'👑':''} ${p.best?'塔 '+p.best+'/18':''} <button class="sp" data-del="${i}">🗑 刪除</button></div>`}).join('')+`<button id="clrall">🗑 清除這台裝置上所有同學的資料</button>`:'')+
+  `<div class="top" style="margin-top:8px">資料只存在這台裝置的瀏覽器裡，不會上傳；換裝置或清除瀏覽器資料後會不見。</div>`);
+ $('#xx').style.display='none';
+ const start=n=>{n=n.trim();if(!n)return;const rr=roster();if(!rr.includes(n)){rr.push(n);setRoster(rr)}who=n;save=readP(n);me.x=10;me.y=10.5;tgt=null;persist();closeM()};
+ $('#st1').onclick=()=>start($('#nm').value);$('#nm').onkeydown=e=>{if(e.key==='Enter')start($('#nm').value)};
+ $('#box').querySelectorAll('[data-pl]').forEach(b=>b.onclick=()=>start(roster()[+b.dataset.pl]));
+ $('#box').querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{const rr=roster(),n=rr[+b.dataset.del];if(n&&confirm('要刪除「'+n+'」的名字和全部成績嗎？不能復原。')){try{localStorage.removeItem(PK+n)}catch(e){}rr.splice(+b.dataset.del,1);setRoster(rr);login()}});
+ const ca=$('#clrall');if(ca)ca.onclick=()=>{if(confirm('要清除這台裝置上所有同學的名字和成績嗎？不能復原。')){try{roster().forEach(n=>localStorage.removeItem(PK+n));localStorage.removeItem(RK)}catch(e){}login()}};
+}
+$('#sw').onclick=()=>{if(!isOpen)login()};
+$('#clr').onclick=()=>{if(isOpen||!who)return;if(confirm('要清除「'+who+'」的蓋章和成績，從頭開始嗎？')){save={st:[0,0,0,0],crown:0,best:0};persist();hud()}};
+login();
 </script></body></html>
